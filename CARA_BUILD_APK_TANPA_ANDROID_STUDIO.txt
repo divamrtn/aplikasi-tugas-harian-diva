@@ -1,0 +1,65 @@
+CARA MEMBUAT APK TANPA ANDROID STUDIO
+
+Cara ini memakai GitHub Actions.
+Jadi kamu tidak perlu install Android Studio di laptop.
+
+YANG DIBUTUHKAN:
+1. Akun GitHub.
+2. File project aplikasi ini.
+3. Internet.
+
+LANGKAH 1 - BUAT REPOSITORY DI GITHUB:
+1. Buka github.com.
+2. Login.
+3. Klik tombol New repository.
+4. Isi nama repository, contoh:
+   aplikasi-tugas-harian-diva
+
+5. Pilih Public atau Private.
+6. Klik Create repository.
+
+LANGKAH 2 - UPLOAD PROJECT:
+1. Extract file ZIP project ini.
+2. Upload semua isi folder ke repository GitHub.
+3. Pastikan folder berikut ikut terupload:
+   .github/workflows/build-apk.yml
+
+4. Pastikan juga ada file:
+   settings.gradle
+   build.gradle
+   app/build.gradle
+
+LANGKAH 3 - JALANKAN BUILD APK:
+1. Masuk ke repository GitHub.
+2. Klik tab Actions.
+3. Klik workflow:
+   Build APK Android
+
+4. Klik Run workflow.
+5. Klik tombol hijau Run workflow.
+
+LANGKAH 4 - DOWNLOAD APK:
+1. Tunggu proses selesai sampai muncul tanda centang hijau.
+2. Klik hasil workflow yang selesai.
+3. Scroll ke bagian Artifacts.
+4. Download:
+   Tugas-Harian-Diva-APK
+
+5. Extract file hasil download.
+6. Di dalamnya ada file:
+   app-debug.apk
+
+LANGKAH 5 - INSTALL KE HP:
+1. Kirim file app-debug.apk ke HP.
+2. Buka file APK di HP.
+3. Jika muncul peringatan, aktifkan:
+   Izinkan install dari sumber tidak dikenal.
+
+4. Klik Install.
+5. Aplikasi siap dipakai.
+
+CATATAN:
+- APK yang dibuat adalah versi debug.
+- APK debug tetap bisa dipasang dan dipakai di HP Android.
+- Untuk tugas kuliah, versi debug sudah cukup.
+- Tidak perlu Android Studio.
