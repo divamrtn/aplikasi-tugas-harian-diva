@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Ambil source code
+      - name: Ambil repository
         uses: actions/checkout@v4
 
       - name: Siapkan Java 17
@@ -20,18 +20,569 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
 
       - name: Siapkan Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.10.2
 
-      - name: Terima lisensi Android SDK
-        run: yes | sdkmanager --licenses
-
       - name: Install Android SDK
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Buat project Android otomatis
+        run: |
+          rm -rf app
+          mkdir -p app/src/main/java/com/divamartin/tugasharian
+          mkdir -p app/src/main/res/values
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "TugasHarianDiva"
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.divamartin.tugasharian'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.divamartin.tugasharian'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:label="Tugas Harian Diva"
+                  android:theme="@style/AppTheme"
+                  android:resizeableActivity="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:statusBarColor">#111827</item>
+                  <item name="android:navigationBarColor">#111827</item>
+                  <item name="android:colorAccent">#4F46E5</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/java/com/divamartin/tugasharian/MainActivity.java <<'EOF'
+          package com.divamartin.tugasharian;
+
+          import android.app.Activity;
+          import android.app.AlertDialog;
+          import android.content.Context;
+          import android.content.SharedPreferences;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.graphics.drawable.GradientDrawable;
+          import android.os.Bundle;
+          import android.text.Editable;
+          import android.text.TextWatcher;
+          import android.view.Gravity;
+          import android.widget.ArrayAdapter;
+          import android.widget.Button;
+          import android.widget.EditText;
+          import android.widget.LinearLayout;
+          import android.widget.ScrollView;
+          import android.widget.Spinner;
+          import android.widget.TextView;
+          import android.widget.Toast;
+
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          import java.text.SimpleDateFormat;
+          import java.util.ArrayList;
+          import java.util.Date;
+          import java.util.Locale;
+
+          public class MainActivity extends Activity {
+
+              private final ArrayList<Tugas> daftarTugas = new ArrayList<>();
+              private LinearLayout listContainer;
+              private EditText inputJudul, inputTanggal, inputKeterangan, inputCari;
+              private Spinner spinnerPrioritas, spinnerFilter;
+              private TextView txtTotal, txtSelesai, txtBelum;
+              private Button btnSimpan;
+              private int editIndex = -1;
+
+              private static final String PREF = "tugas_harian_diva";
+              private static final String KEY = "data_tugas";
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  loadData();
+                  buatTampilan();
+                  tampilkanData();
+              }
+
+              private void buatTampilan() {
+                  ScrollView scroll = new ScrollView(this);
+                  LinearLayout root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setPadding(dp(16), dp(16), dp(16), dp(16));
+                  root.setBackgroundColor(Color.parseColor("#F3F6FB"));
+                  scroll.addView(root);
+
+                  LinearLayout header = new LinearLayout(this);
+                  header.setOrientation(LinearLayout.VERTICAL);
+                  header.setPadding(dp(18), dp(18), dp(18), dp(18));
+                  header.setBackground(bg("#4F46E5", 22));
+                  root.addView(header, new LinearLayout.LayoutParams(-1, -2));
+
+                  TextView judulApp = label("Aplikasi Tugas Harian", 24, "#FFFFFF", true);
+                  header.addView(judulApp);
+
+                  TextView sub = label("Aplikasi Android sederhana untuk mencatat tugas harian.", 14, "#EEF2FF", false);
+                  sub.setPadding(0, dp(5), 0, dp(12));
+                  header.addView(sub);
+
+                  LinearLayout statistik = new LinearLayout(this);
+                  statistik.setOrientation(LinearLayout.HORIZONTAL);
+                  header.addView(statistik);
+
+                  txtTotal = stat("Total\n0");
+                  txtSelesai = stat("Selesai\n0");
+                  txtBelum = stat("Belum\n0");
+
+                  statistik.addView(txtTotal, new LinearLayout.LayoutParams(0, dp(58), 1));
+                  statistik.addView(txtSelesai, new LinearLayout.LayoutParams(0, dp(58), 1));
+                  statistik.addView(txtBelum, new LinearLayout.LayoutParams(0, dp(58), 1));
+
+                  LinearLayout form = new LinearLayout(this);
+                  form.setOrientation(LinearLayout.VERTICAL);
+                  form.setPadding(dp(16), dp(16), dp(16), dp(16));
+                  form.setBackground(bg("#FFFFFF", 18));
+                  LinearLayout.LayoutParams formParam = new LinearLayout.LayoutParams(-1, -2);
+                  formParam.setMargins(0, dp(16), 0, dp(12));
+                  root.addView(form, formParam);
+
+                  form.addView(label("Form Tugas", 18, "#111827", true));
+
+                  inputJudul = input("Nama tugas");
+                  form.addView(inputJudul);
+
+                  inputTanggal = input("Tanggal, contoh 2026-07-05");
+                  inputTanggal.setText(new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date()));
+                  form.addView(inputTanggal);
+
+                  spinnerPrioritas = spinner(new String[]{"Rendah", "Sedang", "Tinggi"});
+                  spinnerPrioritas.setSelection(1);
+                  form.addView(spinnerPrioritas);
+
+                  inputKeterangan = input("Keterangan tugas");
+                  inputKeterangan.setMinLines(2);
+                  form.addView(inputKeterangan);
+
+                  LinearLayout tombolForm = new LinearLayout(this);
+                  tombolForm.setOrientation(LinearLayout.HORIZONTAL);
+                  tombolForm.setPadding(0, dp(10), 0, 0);
+                  form.addView(tombolForm);
+
+                  btnSimpan = tombol("Tambah Tugas", "#4F46E5");
+                  Button btnBatal = tombol("Batal Edit", "#64748B");
+
+                  tombolForm.addView(btnSimpan, new LinearLayout.LayoutParams(0, dp(48), 1));
+                  LinearLayout.LayoutParams batalParam = new LinearLayout.LayoutParams(0, dp(48), 1);
+                  batalParam.setMargins(dp(8), 0, 0, 0);
+                  tombolForm.addView(btnBatal, batalParam);
+
+                  btnSimpan.setOnClickListener(v -> simpanTugas());
+                  btnBatal.setOnClickListener(v -> resetForm());
+
+                  inputCari = input("Cari tugas...");
+                  root.addView(inputCari);
+
+                  spinnerFilter = spinner(new String[]{"Semua", "Belum Selesai", "Selesai"});
+                  root.addView(spinnerFilter);
+
+                  inputCari.addTextChangedListener(new TextWatcher() {
+                      public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                      public void onTextChanged(CharSequence s, int start, int before, int count) {
+                          tampilkanData();
+                      }
+                      public void afterTextChanged(Editable s) {}
+                  });
+
+                  spinnerFilter.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+                      public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
+                          tampilkanData();
+                      }
+                      public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+                  });
+
+                  listContainer = new LinearLayout(this);
+                  listContainer.setOrientation(LinearLayout.VERTICAL);
+                  root.addView(listContainer);
+
+                  Button hapusSemua = tombol("Hapus Semua Data", "#EF4444");
+                  LinearLayout.LayoutParams hapusParam = new LinearLayout.LayoutParams(-1, dp(50));
+                  hapusParam.setMargins(0, dp(12), 0, dp(24));
+                  root.addView(hapusSemua, hapusParam);
+
+                  hapusSemua.setOnClickListener(v -> {
+                      if (daftarTugas.isEmpty()) {
+                          Toast.makeText(this, "Belum ada data.", Toast.LENGTH_SHORT).show();
+                          return;
+                      }
+                      new AlertDialog.Builder(this)
+                              .setTitle("Konfirmasi")
+                              .setMessage("Yakin ingin menghapus semua tugas?")
+                              .setPositiveButton("Ya", (dialog, which) -> {
+                                  daftarTugas.clear();
+                                  saveData();
+                                  tampilkanData();
+                              })
+                              .setNegativeButton("Batal", null)
+                              .show();
+                  });
+
+                  setContentView(scroll);
+              }
+
+              private void simpanTugas() {
+                  String judul = inputJudul.getText().toString().trim();
+                  String tanggal = inputTanggal.getText().toString().trim();
+                  String prioritas = spinnerPrioritas.getSelectedItem().toString();
+                  String ket = inputKeterangan.getText().toString().trim();
+
+                  if (judul.isEmpty()) {
+                      Toast.makeText(this, "Nama tugas wajib diisi.", Toast.LENGTH_SHORT).show();
+                      return;
+                  }
+
+                  if (!tanggal.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                      Toast.makeText(this, "Tanggal harus format YYYY-MM-DD.", Toast.LENGTH_SHORT).show();
+                      return;
+                  }
+
+                  if (editIndex >= 0) {
+                      Tugas t = daftarTugas.get(editIndex);
+                      t.judul = judul;
+                      t.tanggal = tanggal;
+                      t.prioritas = prioritas;
+                      t.keterangan = ket;
+                      Toast.makeText(this, "Tugas diperbarui.", Toast.LENGTH_SHORT).show();
+                  } else {
+                      daftarTugas.add(new Tugas(judul, tanggal, prioritas, "Belum Selesai", ket));
+                      Toast.makeText(this, "Tugas ditambahkan.", Toast.LENGTH_SHORT).show();
+                  }
+
+                  saveData();
+                  resetForm();
+                  tampilkanData();
+              }
+
+              private void tampilkanData() {
+                  if (listContainer == null) return;
+
+                  listContainer.removeAllViews();
+
+                  String keyword = inputCari == null ? "" : inputCari.getText().toString().toLowerCase().trim();
+                  String filter = spinnerFilter == null ? "Semua" : spinnerFilter.getSelectedItem().toString();
+
+                  int selesai = 0;
+                  for (Tugas t : daftarTugas) {
+                      if (t.status.equals("Selesai")) selesai++;
+                  }
+
+                  if (txtTotal != null) txtTotal.setText("Total\n" + daftarTugas.size());
+                  if (txtSelesai != null) txtSelesai.setText("Selesai\n" + selesai);
+                  if (txtBelum != null) txtBelum.setText("Belum\n" + (daftarTugas.size() - selesai));
+
+                  boolean ada = false;
+
+                  for (int i = daftarTugas.size() - 1; i >= 0; i--) {
+                      Tugas t = daftarTugas.get(i);
+
+                      boolean cocokCari = t.judul.toLowerCase().contains(keyword)
+                              || t.keterangan.toLowerCase().contains(keyword)
+                              || t.prioritas.toLowerCase().contains(keyword)
+                              || t.status.toLowerCase().contains(keyword);
+
+                      boolean cocokFilter = filter.equals("Semua") || t.status.equals(filter);
+
+                      if (cocokCari && cocokFilter) {
+                          ada = true;
+                          listContainer.addView(kartuTugas(t, i));
+                      }
+                  }
+
+                  if (!ada) {
+                      TextView kosong = label("Belum ada tugas yang ditampilkan.", 15, "#64748B", false);
+                      kosong.setGravity(Gravity.CENTER);
+                      kosong.setPadding(0, dp(24), 0, dp(24));
+                      listContainer.addView(kosong);
+                  }
+              }
+
+              private LinearLayout kartuTugas(Tugas tugas, int index) {
+                  LinearLayout card = new LinearLayout(this);
+                  card.setOrientation(LinearLayout.VERTICAL);
+                  card.setPadding(dp(16), dp(14), dp(16), dp(14));
+                  card.setBackground(bg("#FFFFFF", 18));
+
+                  LinearLayout.LayoutParams cardParam = new LinearLayout.LayoutParams(-1, -2);
+                  cardParam.setMargins(0, dp(10), 0, 0);
+                  card.setLayoutParams(cardParam);
+
+                  card.addView(label(tugas.judul, 18, "#111827", true));
+                  card.addView(label("Tanggal: " + tugas.tanggal + " | Prioritas: " + tugas.prioritas + " | Status: " + tugas.status, 12, "#4B5563", false));
+
+                  if (!tugas.keterangan.isEmpty()) {
+                      TextView ket = label(tugas.keterangan, 14, "#374151", false);
+                      ket.setPadding(0, dp(8), 0, dp(8));
+                      card.addView(ket);
+                  }
+
+                  LinearLayout row = new LinearLayout(this);
+                  row.setOrientation(LinearLayout.HORIZONTAL);
+                  row.setPadding(0, dp(8), 0, 0);
+                  card.addView(row);
+
+                  Button btnStatus = tombol(tugas.status.equals("Selesai") ? "Belum" : "Selesai", "#22C55E");
+                  Button btnEdit = tombol("Edit", "#F59E0B");
+                  Button btnHapus = tombol("Hapus", "#EF4444");
+
+                  row.addView(btnStatus, new LinearLayout.LayoutParams(0, dp(44), 1));
+
+                  LinearLayout.LayoutParams editParam = new LinearLayout.LayoutParams(0, dp(44), 1);
+                  editParam.setMargins(dp(6), 0, 0, 0);
+                  row.addView(btnEdit, editParam);
+
+                  LinearLayout.LayoutParams hapusParam = new LinearLayout.LayoutParams(0, dp(44), 1);
+                  hapusParam.setMargins(dp(6), 0, 0, 0);
+                  row.addView(btnHapus, hapusParam);
+
+                  btnStatus.setOnClickListener(v -> {
+                      tugas.status = tugas.status.equals("Selesai") ? "Belum Selesai" : "Selesai";
+                      saveData();
+                      tampilkanData();
+                  });
+
+                  btnEdit.setOnClickListener(v -> {
+                      editIndex = index;
+                      inputJudul.setText(tugas.judul);
+                      inputTanggal.setText(tugas.tanggal);
+                      inputKeterangan.setText(tugas.keterangan);
+
+                      if (tugas.prioritas.equals("Rendah")) spinnerPrioritas.setSelection(0);
+                      else if (tugas.prioritas.equals("Sedang")) spinnerPrioritas.setSelection(1);
+                      else spinnerPrioritas.setSelection(2);
+
+                      btnSimpan.setText("Simpan Perubahan");
+                      Toast.makeText(this, "Mode edit aktif.", Toast.LENGTH_SHORT).show();
+                  });
+
+                  btnHapus.setOnClickListener(v -> new AlertDialog.Builder(this)
+                          .setTitle("Hapus Tugas")
+                          .setMessage("Hapus tugas \"" + tugas.judul + "\"?")
+                          .setPositiveButton("Hapus", (dialog, which) -> {
+                              daftarTugas.remove(index);
+                              saveData();
+                              resetForm();
+                              tampilkanData();
+                          })
+                          .setNegativeButton("Batal", null)
+                          .show());
+
+                  return card;
+              }
+
+              private void resetForm() {
+                  editIndex = -1;
+                  inputJudul.setText("");
+                  inputTanggal.setText(new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date()));
+                  inputKeterangan.setText("");
+                  spinnerPrioritas.setSelection(1);
+                  btnSimpan.setText("Tambah Tugas");
+              }
+
+              private void saveData() {
+                  try {
+                      JSONArray array = new JSONArray();
+
+                      for (Tugas t : daftarTugas) {
+                          JSONObject obj = new JSONObject();
+                          obj.put("judul", t.judul);
+                          obj.put("tanggal", t.tanggal);
+                          obj.put("prioritas", t.prioritas);
+                          obj.put("status", t.status);
+                          obj.put("keterangan", t.keterangan);
+                          array.put(obj);
+                      }
+
+                      SharedPreferences pref = getSharedPreferences(PREF, Context.MODE_PRIVATE);
+                      pref.edit().putString(KEY, array.toString()).apply();
+                  } catch (Exception e) {
+                      Toast.makeText(this, "Gagal menyimpan data.", Toast.LENGTH_SHORT).show();
+                  }
+              }
+
+              private void loadData() {
+                  try {
+                      SharedPreferences pref = getSharedPreferences(PREF, Context.MODE_PRIVATE);
+                      JSONArray array = new JSONArray(pref.getString(KEY, "[]"));
+
+                      daftarTugas.clear();
+
+                      for (int i = 0; i < array.length(); i++) {
+                          JSONObject obj = array.getJSONObject(i);
+                          daftarTugas.add(new Tugas(
+                                  obj.optString("judul"),
+                                  obj.optString("tanggal"),
+                                  obj.optString("prioritas"),
+                                  obj.optString("status"),
+                                  obj.optString("keterangan")
+                          ));
+                      }
+                  } catch (Exception e) {
+                      daftarTugas.clear();
+                  }
+              }
+
+              private TextView label(String text, int size, String color, boolean bold) {
+                  TextView tv = new TextView(this);
+                  tv.setText(text);
+                  tv.setTextSize(size);
+                  tv.setTextColor(Color.parseColor(color));
+                  if (bold) tv.setTypeface(Typeface.DEFAULT_BOLD);
+                  return tv;
+              }
+
+              private TextView stat(String text) {
+                  TextView tv = label(text, 13, "#FFFFFF", true);
+                  tv.setGravity(Gravity.CENTER);
+                  tv.setBackground(bg("#3730A3", 14));
+                  tv.setPadding(dp(4), dp(6), dp(4), dp(6));
+                  return tv;
+              }
+
+              private EditText input(String hint) {
+                  EditText input = new EditText(this);
+                  input.setHint(hint);
+                  input.setTextSize(14);
+                  input.setSingleLine(false);
+                  input.setPadding(dp(12), 0, dp(12), 0);
+                  input.setBackground(bgStroke("#FFFFFF", "#CBD5E1", 14));
+
+                  LinearLayout.LayoutParams param = new LinearLayout.LayoutParams(-1, dp(52));
+                  param.setMargins(0, dp(10), 0, 0);
+                  input.setLayoutParams(param);
+
+                  return input;
+              }
+
+              private Spinner spinner(String[] data) {
+                  Spinner sp = new Spinner(this);
+                  ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, data);
+                  sp.setAdapter(adapter);
+
+                  LinearLayout.LayoutParams param = new LinearLayout.LayoutParams(-1, dp(52));
+                  param.setMargins(0, dp(10), 0, 0);
+                  sp.setLayoutParams(param);
+
+                  return sp;
+              }
+
+              private Button tombol(String text, String color) {
+                  Button btn = new Button(this);
+                  btn.setText(text);
+                  btn.setTextColor(Color.WHITE);
+                  btn.setTextSize(13);
+                  btn.setTypeface(Typeface.DEFAULT_BOLD);
+                  btn.setAllCaps(false);
+                  btn.setBackground(bg(color, 14));
+                  return btn;
+              }
+
+              private GradientDrawable bg(String color, int radius) {
+                  GradientDrawable gd = new GradientDrawable();
+                  gd.setColor(Color.parseColor(color));
+                  gd.setCornerRadius(dp(radius));
+                  return gd;
+              }
+
+              private GradientDrawable bgStroke(String color, String stroke, int radius) {
+                  GradientDrawable gd = bg(color, radius);
+                  gd.setStroke(dp(1), Color.parseColor(stroke));
+                  return gd;
+              }
+
+              private int dp(int value) {
+                  return Math.round(value * getResources().getDisplayMetrics().density);
+              }
+
+              static class Tugas {
+                  String judul, tanggal, prioritas, status, keterangan;
+
+                  Tugas(String judul, String tanggal, String prioritas, String status, String keterangan) {
+                      this.judul = judul;
+                      this.tanggal = tanggal;
+                      this.prioritas = prioritas;
+                      this.status = status;
+                      this.keterangan = keterangan;
+                  }
+              }
+          }
+          EOF
 
       - name: Build APK Debug
         run: gradle assembleDebug
